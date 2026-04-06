@@ -11,9 +11,9 @@ test_engine = create_async_engine(TEST_DATABASE_URL, echo=True)
 TestAsyncSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(autouse=True)
 async def create_tables():
-    """Создаёт таблицы один раз перед всеми тестами."""
+    """Создаёт таблицы перед каждым тестом, удаляет после."""
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -31,7 +31,7 @@ async def db_session():
 
 @pytest.fixture
 async def client(db_session):
-    """HTTP клиент с подменой зависимостей."""
+    """HTTP клиент с подменой зависимости get_db и моком RabbitMQ."""
     async def override_get_db():
         yield db_session
 
