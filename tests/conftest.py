@@ -1,9 +1,9 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.database import Base, get_db
 from app.main import app
+from httpx import AsyncClient, ASGITransport
 
 # Используем SQLite in-memory для тестов
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -12,12 +12,10 @@ test_engine = create_async_engine(TEST_DATABASE_URL, echo=True)
 TestAsyncSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Один event loop на всю сессию тестов."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture(scope="session", autouse=True)
+def anyio_backend():
+    """Обязательно для pytest-asyncio."""
+    return "asyncio"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -48,13 +46,8 @@ async def client(db_session):
     app.dependency_overrides[get_db] = override_get_db
 
     # Мокаем RabbitMQ
-    with patch("app.rabbitmq.publish_order_event", new_callable=AsyncMock) as mock_rabbit:
-        from httpx import AsyncClient, ASGITransport
+    with patch("app.rabbitmq.publish_order_event", new_callable=AsyncMock):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            client.mock_rabbit = mock_rabbit
             yield client
 
     app.dependency_overrides.clear()
-
-    # Очищаем моки
-    mock_rabbit.reset_mock()
