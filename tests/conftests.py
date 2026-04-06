@@ -1,6 +1,7 @@
 import pytest
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from unittest.mock import patch
 from app.database import Base, get_db
 from app.main import app
 
@@ -9,6 +10,12 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=True)
 TestAsyncSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
+
+
+@pytest.fixture(autouse=True)
+def mock_rabbitmq():
+    with patch("app.rabbitmq.publish_order_event") as mock:
+        yield mock
 
 
 @pytest.fixture(scope="session")
