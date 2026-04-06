@@ -1,7 +1,7 @@
 import pytest
 import asyncio
+from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from unittest.mock import patch
 from app.database import Base, get_db
 from app.main import app
 
@@ -10,12 +10,6 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=True)
 TestAsyncSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
-
-
-@pytest.fixture(autouse=True)
-def mock_rabbitmq():
-    with patch("app.rabbitmq.publish_order_event") as mock:
-        yield mock
 
 
 @pytest.fixture(scope="session")
@@ -46,14 +40,22 @@ async def db_session():
 
 @pytest.fixture
 async def client(db_session):
-    """HTTP клиент с подменой зависимости get_db."""
+    """HTTP клиент с подменой зависимости get_db и моком RabbitMQ."""
+    # Подменяем зависимость БД
     async def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
 
-    from httpx import AsyncClient, ASGITransport
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
+    # Мокаем RabbitMQ
+    with patch("app.rabbitmq.publish_order_event", new_callable=AsyncMock) as mock_rabbit:
+        from httpx import AsyncClient, ASGITransport
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # Сохраняем мок в клиенте, если нужно проверять вызовы
+            client.mock_rabbit = mock_rabbit
+            yield client
 
     app.dependency_overrides.clear()
+
+    # Очищаем моки после теста
+    mock_rabbit.assert_not_called()
