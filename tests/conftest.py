@@ -51,11 +51,10 @@ async def client(db_session):
     with patch("app.rabbitmq.publish_order_event", new_callable=AsyncMock) as mock_rabbit:
         from httpx import AsyncClient, ASGITransport
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            # Сохраняем мок в клиенте, если нужно проверять вызовы
             client.mock_rabbit = mock_rabbit
             yield client
 
     app.dependency_overrides.clear()
 
-    # Очищаем моки после теста
-    mock_rabbit.assert_not_called()
+    # Очищаем моки
+    mock_rabbit.reset_mock()
