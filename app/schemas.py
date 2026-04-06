@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 
 
@@ -15,9 +15,7 @@ class MenuItemCreate(MenuItemBase):
 
 class MenuItemResponse(MenuItemBase):
     id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrderBase(BaseModel):
@@ -28,6 +26,4 @@ class OrderResponse(BaseModel):
     id: int
     status: str
     items: List[MenuItemResponse]
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
