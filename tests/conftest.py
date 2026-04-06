@@ -5,7 +5,6 @@ from app.database import Base, get_db
 from app.main import app
 from httpx import AsyncClient, ASGITransport
 
-# Используем SQLite in-memory для тестов
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=True)
@@ -13,14 +12,8 @@ TestAsyncSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def anyio_backend():
-    """Обязательно для pytest-asyncio."""
-    return "asyncio"
-
-
-@pytest.fixture(scope="session", autouse=True)
 async def create_tables():
-    """Создаёт таблицы перед тестами, удаляет после."""
+    """Создаёт таблицы один раз перед всеми тестами."""
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -38,14 +31,12 @@ async def db_session():
 
 @pytest.fixture
 async def client(db_session):
-    """HTTP клиент с подменой зависимости get_db и моком RabbitMQ."""
-    # Подменяем зависимость БД
+    """HTTP клиент с подменой зависимостей."""
     async def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
 
-    # Мокаем RabbitMQ
     with patch("app.rabbitmq.publish_order_event", new_callable=AsyncMock):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client
